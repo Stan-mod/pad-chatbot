@@ -1,0 +1,36 @@
+import { useState } from 'react';
+
+export default function Home() {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+
+  const send = async () => {
+    if (!input) return;
+    setMessages(m => [...m, { from: 'user', text: input }]);
+    setInput('');
+    const res = await fetch('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: input })
+    });
+    const data = await res.json();
+    setMessages(m => [...m, { from: 'bot', text: data.reply }]);
+  };
+
+  return (
+    <main style={{ maxWidth: 600, margin: 'auto', padding: 20 }}>
+      <h1>📚 PAD GPT Assistant</h1>
+      <div style={{ border: '1px solid #ccc', padding: 10, borderRadius: 8, height: 400, overflowY: 'auto' }}>
+        {messages.map((m, i) => (
+          <div key={i} style={{ textAlign: m.from === 'user' ? 'right' : 'left', margin: '10px 0' }}>
+            <div style={{ display: 'inline-block', background: m.from === 'user' ? '#daf1da' : '#eee', padding: 10, borderRadius: 8 }}>
+              {m.text}
+            </div>
+          </div>
+        ))}
+      </div>
+      <textarea rows={2} style={{ width: '100%', marginTop: 10 }} value={input} onChange={e => setInput(e.target.value)} />
+      <button onClick={send} style={{ width: '100%', marginTop: 10 }}>Send</button>
+    </main>
+  );
+}
