@@ -1,0 +1,44 @@
+import { Configuration, OpenAIApi } from 'openai';
+import fetch from 'node-fetch';
+import pdfParse from 'pdf-parse';
+
+const BASE_URL = 'https://surrey.res.services/PAD/';
+const OPENAI_KEY = process.env.OPENAI_API_KEY;
+
+export default async function handler(req, res) {
+  const { question } = req.body;
+
+  const html = await fetch(BASE_URL).then(r => r.text());
+  const pdfUrls = [...html.matchAll(/href="([^"]+\.pdf)"/g)]
+    .map(m => new URL(m[1], BASE_URL).toString());
+
+  let foundText = '', usedPdf = '';
+  for (const url of pdfUrls) {
+    try {
+      const buffer = await fetch(url).then(r => r.buffer());
+      const text = (await pdfParse(buffer)).text;
+      if (text.toLowerCase().includes(question.toLowerCase())) {
+        foundText = text.slice(0, 4000);
+        usedPdf = url.split('/').pop();
+        break;
+      }
+    } catch {}
+  }
+
+  if (!foundText) {
+    return res.json({ reply: '❗ No relevant information found in PAD documents.' });
+  }
+
+  const openai = new OpenAIApi(new Configuration({ apiKey: OPENAI_KEY }));
+  const completion = await openai.createChatCompletion({
+    model: 'gpt-4',
+    messages: [
+      { role: 'system', content: `You are an assistant responding only using PAD content. Start with 📄 ${usedPdf}.` },
+      { role: 'user', content: `${question}\n\nPAD content:\n${foundText}` }
+    ],
+    max_tokens: 400
+  });
+
+  const reply = completion.data.choices[0].message.content.trim();
+  res.json({ reply: `📄 ${usedPdf}\n\n${reply}` });
+}
